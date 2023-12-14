@@ -23,7 +23,7 @@ func main() {
 		}
 
 		// Handle the execution of the input.
-		if err := execInput2(input); err != nil {
+		if err := execInput(input); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 		}
 	}
@@ -33,8 +33,6 @@ func main() {
 var ErrNoPath = errors.New("path required")
 
 var ErrInvalidCommand = errors.New("invalid command")
-
-var lastArgs = 0
 
 func writeToDirectory(source, target string) {
 	// https://stackoverflow.com/questions/56075774/golang-os-renamefromdir-todir-not-working-in-windows
@@ -110,16 +108,15 @@ func redirectIO(args []string) error {
 	return nil
 }
 
-func execInput2(input string) error {
-	if err := execInput(input); err != nil {
+func checkAnd(err error, lastArgs int, args []string) error {
+	if err != nil {
 		return err
 	}
-	args := strings.Split(input, " ")
 	if lastArgs < len(args)-1 {
 		if args[lastArgs+1] == "&&" {
 			input2 := ""
 			for i := lastArgs + 2; i < len(args); i++ {
-				input2 = input2 + " " + args[i]
+				input2 = input2 + args[i] + " "
 			}
 			return execInput(input2)
 		}
@@ -130,35 +127,31 @@ func execInput2(input string) error {
 func execInput(input string) error {
 	// Remove the newline character.
 	input = strings.TrimSuffix(input, "\n")
+	input = strings.TrimSuffix(input, " ")
 
 	// Split the input separate the command and the arguments.
 	args := strings.Split(input, " ")
-
 	// Check for built-in commands.
 	switch args[0] {
 	case "cd":
-		lastArgs = 1
 		// 'cd' to home with empty path not yet supported.
 		if len(args) < 2 {
 			return ErrNoPath
 		}
 		// Change the directory and return the error.
-		return os.Chdir(args[1])
+		return checkAnd(os.Chdir(args[1]), 1, args)
 	case "pwd":
-		lastArgs = 0
 		// Get working directory and error
 		wd, err := os.Getwd()
 		fmt.Println(wd)
-		return err
+		return checkAnd(err, 0, args)
 	case "mkdir":
-		lastArgs = 1
 		if len(args) < 2 {
 			return ErrNoPath
 		}
 		// Make the directory and return the error.
-		return os.Mkdir(args[1], os.ModePerm) // double check ModePerm
-	case "mv":
-		lastArgs = 2
+		return checkAnd(os.Mkdir(args[1], os.ModePerm), 1, args) // double check ModePerm
+	case "mv": //look into not being a path
 		if len(args) < 3 {
 			return ErrNoPath
 		}
@@ -173,34 +166,29 @@ func execInput(input string) error {
 		}
 		writeToDirectory(args[1], args[2])
 		os.Remove(args[1])
-		return nil
+		return checkAnd(nil, 2, args)
 	case "rename":
-		lastArgs = 2
 		if len(args) < 3 {
 			return ErrNoPath
 		}
-		return os.Rename(args[1], args[2])
+		return checkAnd(os.Rename(args[1], args[2]), 2, args)
 	case "rm":
-		lastArgs = 1
 		if len(args) < 2 {
 			return ErrNoPath
 		}
-		return os.Remove(args[1])
+		return checkAnd(os.Remove(args[1]), 1, args)
 	case "getpid":
-		lastArgs = 0
 		fmt.Println(os.Getpid())
-		return nil
+		return checkAnd(nil, 0, args)
 	case "setenv":
-		lastArgs = 1
 		if len(args) < 2 {
 			return ErrNoPath
 		}
 		// https://unix.stackexchange.com/questions/368944/what-is-the-difference-between-env-setenv-export-and-when-to-use
 		// https://www.geeksforgeeks.org/how-to-split-a-string-in-golang/
 		pair := strings.Split(args[1], "=")
-		return os.Setenv(pair[0], pair[1])
+		return checkAnd(os.Setenv(pair[0], pair[1]), 1, args)
 	case "getenv":
-		lastArgs = 1
 		if len(args) < 2 {
 			return ErrNoPath
 		}
@@ -209,24 +197,22 @@ func execInput(input string) error {
 			return nil
 		}
 		fmt.Println(value)
-		return nil
+		return checkAnd(nil, 1, args)
 	case "unset":
-		lastArgs = 1
 		if len(args) < 2 {
 			return ErrNoPath
 		}
-		return os.Unsetenv(args[1])
+		return checkAnd(os.Unsetenv(args[1]), 1, args)
 	case "echo":
-		lastArgs = 1
 		if len(args) < 2 {
 			fmt.Println()
 			return nil
 		}
 		split := strings.Split(input, "\"")
 		fmt.Println(split[1])
-		return nil
+		fmt.Println(split)
+		return checkAnd(nil, 1, split)
 	case "ls":
-		lastArgs = 0
 		// https://stackoverflow.com/questions/14668850/list-directory-in-go
 		entries, err := os.ReadDir("./")
 		if err != nil {
@@ -235,11 +221,10 @@ func execInput(input string) error {
 		for _, e := range entries {
 			fmt.Println(e.Name())
 		}
-		return nil
+		return checkAnd(nil, 0, args)
 	case "cat":
 		// not working
 		// https://gist.github.com/tetsuok/2795749#file-cat-go-L53
-		lastArgs = 1
 		if len(args) < 2 {
 			return ErrNoPath
 		}
@@ -262,18 +247,16 @@ func execInput(input string) error {
 				fmt.Printf("%s", line)
 			}
 		}
-		return nil
+		return checkAnd(nil, 1, args)
 	case "kill":
-		lastArgs = 0
 		process, err := os.FindProcess(os.Getpid())
 		if err != nil {
 			return err
 		}
-		return process.Kill()
+		return checkAnd(process.Kill(), 0, args)
 	case "exit":
-		lastArgs = 0
 		os.Exit(0)
-		return nil
+		return checkAnd(nil, 0, args)
 	}
 
 	fmt.Println("hello")
