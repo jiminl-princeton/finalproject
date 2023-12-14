@@ -111,7 +111,7 @@ func redirectIO(args []string) error {
 }
 
 func execInput2(input string) error {
-	if err := execInput2(input); err != nil {
+	if err := execInput(input); err != nil {
 		return err
 	}
 	args := strings.Split(input, " ")
@@ -119,9 +119,9 @@ func execInput2(input string) error {
 		if args[lastArgs+1] == "&&" {
 			input2 := ""
 			for i := lastArgs + 2; i < len(args); i++ {
-				input2 = input2 + args[i]
+				input2 = input2 + " " + args[i]
 			}
-			return execInput2(input2)
+			return execInput(input2)
 		}
 	}
 	return nil
