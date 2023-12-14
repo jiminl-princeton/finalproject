@@ -251,9 +251,56 @@ func checkAnd(err error, lastArgs int, args []string) error {
 	return nil
 }
 
+func getKeyValue(args []string) ([]string, error) {
+	keyval := []string{}
+	equalsSeen := false
+	for i, e := range args {
+		if e == "=" {
+			equalsSeen = true
+			if i-1 <= 0 {
+				return keyval, ErrInvalidCommand
+			}
+			if i+1 >= len(args) {
+				return keyval, ErrInvalidCommand
+			}
+			keyval = append(keyval, args[i-1])
+			keyval = append(keyval, args[i+1])
+			break
+		}
+	}
+	if !equalsSeen {
+		return keyval, ErrInvalidCommand
+	}
+	return keyval, nil
+}
+
 func separateRedirectSigns(args []string) []string {
 	newArgs := []string{}
+	tmpArgs := []string{}
 	for _, e := range args {
+		temp := 0
+		if string(e[0]) == "\"" {
+			inString := true
+			for i, c := range e {
+				if i == 0 {
+					continue
+				}
+				if string(c) == "\"" {
+					inString = !inString
+					if inString && i != 0 {
+						tmpArgs = append(tmpArgs, e[temp+1:i])
+					} else if !inString {
+						tmpArgs = append(tmpArgs, e[temp:i+1])
+					}
+					temp = i
+					continue
+				}
+			}
+		} else {
+			tmpArgs = append(tmpArgs, e)
+		}
+	}
+	for _, e := range tmpArgs {
 		if string(e[0]) == "\"" || e == "<" || e == ">" {
 			newArgs = append(newArgs, e)
 			continue
@@ -336,7 +383,14 @@ func execInput(input string) error {
 		}
 		return checkAnd(os.Remove(args[1]), 1, args)
 	case "getpid":
-		fmt.Println(os.Getpid())
+		err := checkRedirection(args)
+		if err != nil {
+			return err
+		}
+		err = echoRedirectIO(fmt.Sprint(os.Getpid()))
+		if err != nil {
+			return err
+		}
 		return checkAnd(nil, 0, args)
 	case "setenv":
 		if len(args) < 2 {
@@ -344,7 +398,10 @@ func execInput(input string) error {
 		}
 		// https://unix.stackexchange.com/questions/368944/what-is-the-difference-between-env-setenv-export-and-when-to-use
 		// https://www.geeksforgeeks.org/how-to-split-a-string-in-golang/
-		pair := strings.Split(args[1], "=")
+		pair, err := getKeyValue(args)
+		if err != nil {
+			return err
+		}
 		return checkAnd(os.Setenv(pair[0], pair[1]), 1, args)
 	case "getenv":
 		if len(args) < 2 {
@@ -354,7 +411,14 @@ func execInput(input string) error {
 		if value == "" {
 			return nil
 		}
-		fmt.Println(value)
+		err := checkRedirection(args)
+		if err != nil {
+			return err
+		}
+		err = echoRedirectIO(value)
+		if err != nil {
+			return err
+		}
 		return checkAnd(nil, 1, args)
 	case "unset":
 		if len(args) < 2 {
