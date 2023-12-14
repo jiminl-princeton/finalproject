@@ -37,6 +37,8 @@ var ErrInvalidCommand = errors.New("invalid command")
 
 var redirectInput = ""
 var redirectOutput = ""
+var redirectInputSignIndex = -1  // index of <
+var redirectOutputSignIndex = -1 // index of >
 
 func writeToDirectory(source, target string) {
 	// https://stackoverflow.com/questions/56075774/golang-os-renamefromdir-todir-not-working-in-windows
@@ -47,11 +49,13 @@ func writeToDirectory(source, target string) {
 
 func redirectIO(source, target string) error {
 	// https://stackoverflow.com/questions/56075774/golang-os-renamefromdir-todir-not-working-in-windows
-	origFile, _ := os.ReadFile(source)
-	newFile, _ := os.Create(target + "/" + source)
+	origFile, err := os.ReadFile(source)
+	if err != nil {
+		return err
+	}
 
 	// https://freshman.tech/snippets/go/check-if-file-is-dir/
-	_, err := os.Stat(source)
+	_, err = os.Stat(source)
 	if err != nil {
 		return ErrNoPath
 	}
@@ -62,18 +66,19 @@ func redirectIO(source, target string) error {
 	}
 
 	_, err = os.Stat(target)
-	if err != nil {
-		os.Create(target)
-	} else {
+	if err == nil {
 		os.Remove(target)
 	}
+	newFile, err := os.Create(target)
+	if err != nil {
+		return err
+	}
+
 	fmt.Fprintf(newFile, "%s", string(origFile))
 	return nil
 }
 
 func checkRedirection(args []string) error {
-	redirectInputIndex := 0  // index of <
-	redirectOutputIndex := 0 // index of >
 	redirectInputSeen := false
 	redirectOutputSeen := false
 
@@ -82,14 +87,14 @@ func checkRedirection(args []string) error {
 		if e == "<" {
 			if !redirectInputSeen {
 				redirectInputSeen = true
-				redirectInputIndex = i
+				redirectInputSignIndex = i
 			} else {
 				return ErrMultipleRedirection
 			}
 		} else if e == ">" {
 			if !redirectOutputSeen {
 				redirectOutputSeen = true
-				redirectOutputIndex = i
+				redirectOutputSignIndex = i
 			} else {
 				return ErrMultipleRedirection
 			}
@@ -97,24 +102,48 @@ func checkRedirection(args []string) error {
 	}
 
 	if redirectInputSeen {
-		if redirectInputIndex+1 >= len(args) || redirectInputIndex-1 < 0 {
+		if redirectInputSignIndex+1 >= len(args) || redirectInputSignIndex-1 < 0 {
+			redirectInputSignIndex = -1
+			redirectOutputSignIndex = -1
 			return ErrInvalidCommand
 		}
-		redirectInput = args[redirectInputIndex+1] // follows <
-	} else {
-		return nil
+		redirectInput = args[redirectInputSignIndex+1]
 	}
 
 	if redirectOutputSeen {
-		if redirectOutputIndex+1 >= len(args) || redirectOutputIndex-1 < 0 {
+		if redirectOutputSignIndex+1 >= len(args) || redirectOutputSignIndex-1 < 0 {
+			redirectInputSignIndex = -1
+			redirectOutputSignIndex = -1
 			return ErrInvalidCommand
 		}
-		redirectOutput = args[redirectOutputIndex+1] // follows >
-	} else {
-		return nil
+		redirectOutput = args[redirectOutputSignIndex+1]
 	}
-
+	if !redirectInputSeen {
+		if redirectOutputSignIndex-1 < 0 {
+			redirectInputSignIndex = -1
+			redirectOutputSignIndex = -1
+			return ErrInvalidCommand
+		}
+		if redirectOutputSignIndex-1 > 0 {
+			redirectInput = args[redirectOutputSignIndex-1]
+			return nil
+		}
+		if redirectOutputSignIndex+2 < len(args) {
+			redirectInput = args[redirectOutputSignIndex+2]
+			return nil
+		}
+	}
 	return nil
+}
+
+func getCommandArg(args []string) string {
+	commandArg := ""
+	if redirectOutputSignIndex+2 < len(args) {
+		commandArg = args[redirectOutputSignIndex+2]
+	} else if redirectInputSignIndex-2 >= 0 {
+		commandArg = args[redirectInputSignIndex-2]
+	}
+	return commandArg
 }
 
 func checkAnd(err error, lastArgs int, args []string) error {
@@ -246,7 +275,12 @@ func execInput(input string) error {
 			return redirectIO(redirectInput, redirectOutput)
 		}
 		if redirectInput == "" && redirectOutput != "" {
-			return nil
+			_, err := os.Stat(redirectOutput)
+			if err == nil {
+				os.Remove(redirectOutput)
+			}
+			_, err = os.Create(redirectOutput)
+			return err
 		}
 		for i := 1; i < len(args); i++ {
 			file, err := os.Open(args[i])
