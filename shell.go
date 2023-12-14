@@ -35,6 +35,9 @@ var ErrNoPath = errors.New("path required")
 var ErrMultipleRedirection = errors.New("multiple redirection of standard output")
 var ErrInvalidCommand = errors.New("invalid command")
 
+var redirectInput = ""
+var redirectOutput = ""
+
 func writeToDirectory(source, target string) {
 	// https://stackoverflow.com/questions/56075774/golang-os-renamefromdir-todir-not-working-in-windows
 	origFile, _ := os.ReadFile(source)
@@ -42,30 +45,35 @@ func writeToDirectory(source, target string) {
 	fmt.Fprintf(newFile, "%s", string(origFile))
 }
 
-func writeToFile(source, target string) error {
+func redirectIO(source, target string) error {
+	// https://stackoverflow.com/questions/56075774/golang-os-renamefromdir-todir-not-working-in-windows
+	origFile, _ := os.ReadFile(source)
+	newFile, _ := os.Create(target + "/" + source)
+
 	// https://freshman.tech/snippets/go/check-if-file-is-dir/
-	// source path (must exist)
 	_, err := os.Stat(source)
 	if err != nil {
 		return ErrNoPath
 	}
-	// target path (need not exist)
+
+	if target == "" {
+		fmt.Printf("%s\n", string(origFile))
+		return nil
+	}
+
 	_, err = os.Stat(target)
 	if err != nil {
 		os.Create(target)
 	} else {
 		os.Remove(target)
 	}
-	// https://stackoverflow.com/questions/56075774/golang-os-renamefromdir-todir-not-working-in-windows
-	origFile, _ := os.ReadFile(source)
-	newFile, _ := os.Create(target + "/" + source)
 	fmt.Fprintf(newFile, "%s", string(origFile))
 	return nil
 }
 
-func redirectIO(args []string) error {
-	redirectInput := 0  // index of <
-	redirectOutput := 0 // index of >
+func checkRedirection(args []string) error {
+	redirectInputIndex := 0  // index of <
+	redirectOutputIndex := 0 // index of >
 	redirectInputSeen := false
 	redirectOutputSeen := false
 
@@ -74,14 +82,14 @@ func redirectIO(args []string) error {
 		if e == "<" {
 			if !redirectInputSeen {
 				redirectInputSeen = true
-				redirectInput = i
+				redirectInputIndex = i
 			} else {
 				return ErrMultipleRedirection
 			}
 		} else if e == ">" {
 			if !redirectOutputSeen {
 				redirectOutputSeen = true
-				redirectOutput = i
+				redirectOutputIndex = i
 			} else {
 				return ErrMultipleRedirection
 			}
@@ -89,19 +97,22 @@ func redirectIO(args []string) error {
 	}
 
 	if redirectInputSeen {
-		if redirectInput+1 >= len(args) || redirectInput-1 < 0 {
+		if redirectInputIndex+1 >= len(args) || redirectInputIndex-1 < 0 {
 			return ErrInvalidCommand
 		}
+		redirectInput = args[redirectInputIndex+1] // follows <
+	} else {
+		return nil
 	}
 
 	if redirectOutputSeen {
-		if redirectOutput+1 >= len(args) || redirectOutput-1 < 0 {
+		if redirectOutputIndex+1 >= len(args) || redirectOutputIndex-1 < 0 {
 			return ErrInvalidCommand
 		}
+		redirectOutput = args[redirectOutputIndex+1] // follows >
+	} else {
+		return nil
 	}
-
-	// input := args[redirectInput+1]   // follows <
-	// output := args[redirectOutput+1] // follows >
 
 	return nil
 }
@@ -220,10 +231,22 @@ func execInput(input string) error {
 		}
 		return checkAnd(nil, 0, args)
 	case "cat":
-		// not working
 		// https://gist.github.com/tetsuok/2795749#file-cat-go-L53
 		if len(args) < 2 {
 			return ErrNoPath
+		}
+		err := checkRedirection(args)
+		if err != nil {
+			return err
+		}
+		if redirectInput != "" && redirectOutput == "" {
+			return redirectIO(redirectInput, redirectOutput)
+		}
+		if redirectInput != "" && redirectOutput != "" {
+			return redirectIO(redirectInput, redirectOutput)
+		}
+		if redirectInput == "" && redirectOutput != "" {
+			return nil
 		}
 		for i := 1; i < len(args); i++ {
 			file, err := os.Open(args[i])
