@@ -15,17 +15,44 @@ import (
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		fmt.Print("> ")
-		// Read the keyboad input.
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-		}
+		Loop(reader)
+	}
+}
 
-		// Handle the execution of the input.
-		if err := execInput(input); err != nil {
-			fmt.Fprintln(os.Stderr, err)
+func Loop(reader *bufio.Reader) {
+	fmt.Print("> ")
+	// Read the keyboad input.
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+
+	input = strings.TrimSuffix(input, "\n")
+	input = strings.TrimSuffix(input, " ")
+	args := strings.Split(input, " ")
+	if args[len(args)-1] == "&" {
+		input2 := ""
+		for i := 0; i < len(args)-1; i++ {
+			input2 = input2 + args[i] + " "
 		}
+		Run(input2, true, reader)
+	} else { // Handle the execution of the input.
+		Run(input, false, reader)
+	}
+}
+
+func Run(input string, back bool, reader *bufio.Reader) {
+	if back {
+		go PrintError(input)
+		Loop(reader)
+	} else {
+		PrintError(input)
+	}
+}
+
+func PrintError(input string) {
+	if err := execInput(input); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 	}
 }
 
