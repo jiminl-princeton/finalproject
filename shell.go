@@ -13,6 +13,7 @@ import (
 )
 
 func main() {
+	fmt.Print("> ")
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		Loop(reader)
@@ -20,7 +21,6 @@ func main() {
 }
 
 func Loop(reader *bufio.Reader) {
-	fmt.Print("> ")
 	// Read the keyboad input.
 	input, err := reader.ReadString('\n')
 	if err != nil {
@@ -35,17 +35,9 @@ func Loop(reader *bufio.Reader) {
 		for i := 0; i < len(args)-1; i++ {
 			input2 = input2 + args[i] + " "
 		}
-		Run(input2, true, reader)
-	} else { // Handle the execution of the input.
-		Run(input, false, reader)
-	}
-}
-
-func Run(input string, back bool, reader *bufio.Reader) {
-	if back {
 		go PrintError(input)
-		Loop(reader)
-	} else {
+		fmt.Print("> ")
+	} else { // Handle the execution of the input.
 		PrintError(input)
 	}
 }
@@ -54,6 +46,7 @@ func PrintError(input string) {
 	if err := execInput(input); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
+	fmt.Print("> ")
 }
 
 // ErrNoPath is returned when 'cd' was called without a second argument.
@@ -342,7 +335,6 @@ func execInput(input string) error {
 		return checkAnd(nil, 0, args)
 	}
 
-	fmt.Println("hello")
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
