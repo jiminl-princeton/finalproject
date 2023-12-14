@@ -74,25 +74,42 @@ func writeToDirectory(source, target string) {
 	fmt.Fprintf(newFile, "%s", string(origFile))
 }
 
-func lsRedirectIO(names []string, target string) error {
-	if target == "" {
+func lsRedirectIO(names []string) error {
+	if redirectOutput == "" {
 		for _, e := range names {
 			fmt.Println(e)
 		}
 		return nil
 	}
 
-	_, err := os.Stat(target)
+	_, err := os.Stat(redirectOutput)
 	if err == nil {
-		os.Remove(target)
+		os.Remove(redirectOutput)
 	}
-	newFile, err := os.Create(target)
+	newFile, err := os.Create(redirectOutput)
 	if err != nil {
 		return err
 	}
 
 	for _, e := range names {
 		fmt.Fprintln(newFile, e)
+	}
+	return nil
+}
+
+func echoRedirectIO(s string) error {
+	if redirectOutput != "" {
+		_, err := os.Stat(redirectOutput)
+		if err == nil {
+			os.Remove(redirectOutput)
+		}
+		newFile, err := os.Create(redirectOutput)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(newFile, s)
+	} else {
+		fmt.Println(s)
 	}
 	return nil
 }
@@ -349,8 +366,15 @@ func execInput(input string) error {
 			fmt.Println()
 			return nil
 		}
+		err := checkRedirection(args)
+		if err != nil {
+			return err
+		}
 		split := strings.SplitN(input, "\"", 3)
-		fmt.Println(split[1])
+		err = echoRedirectIO(split[1])
+		if err != nil {
+			return err
+		}
 		return checkAnd(nil, 0, strings.Split(split[2], " "))
 	case "ls":
 		// https://stackoverflow.com/questions/14668850/list-directory-in-go
@@ -366,7 +390,7 @@ func execInput(input string) error {
 		for _, e := range entries {
 			names = append(names, e.Name())
 		}
-		err = lsRedirectIO(names, redirectOutput)
+		err = lsRedirectIO(names)
 		if err != nil {
 			return err
 		}
