@@ -74,7 +74,30 @@ func writeToDirectory(source, target string) {
 	fmt.Fprintf(newFile, "%s", string(origFile))
 }
 
-func redirectIO(source, target string) error {
+func lsRedirectIO(names []string, target string) error {
+	if target == "" {
+		for _, e := range names {
+			fmt.Println(e)
+		}
+		return nil
+	}
+
+	_, err := os.Stat(target)
+	if err == nil {
+		os.Remove(target)
+	}
+	newFile, err := os.Create(target)
+	if err != nil {
+		return err
+	}
+
+	for _, e := range names {
+		fmt.Fprintln(newFile, e)
+	}
+	return nil
+}
+
+func catRedirectIO(source, target string) error {
 	// https://stackoverflow.com/questions/56075774/golang-os-renamefromdir-todir-not-working-in-windows
 	origFile, err := os.ReadFile(source)
 	if err != nil {
@@ -103,6 +126,13 @@ func redirectIO(source, target string) error {
 
 	fmt.Fprintf(newFile, "%s", string(origFile))
 	return nil
+}
+
+func resetRedirectIO() {
+	redirectInput = ""
+	redirectOutput = ""
+	redirectInputSignIndex = -1
+	redirectOutputSignIndex = -1
 }
 
 func checkRedirection(args []string) error {
@@ -136,7 +166,6 @@ func checkRedirection(args []string) error {
 		}
 		redirectInput = args[redirectInputSignIndex+1]
 	}
-
 	if redirectOutputSeen {
 		if redirectOutputSignIndex+1 >= len(args) || redirectOutputSignIndex-1 < 0 {
 			redirectInputSignIndex = -1
@@ -145,7 +174,7 @@ func checkRedirection(args []string) error {
 		}
 		redirectOutput = args[redirectOutputSignIndex+1]
 	}
-	if !redirectInputSeen {
+	if !redirectInputSeen && redirectOutputSeen {
 		if redirectOutputSignIndex-1 < 0 {
 			redirectInputSignIndex = -1
 			redirectOutputSignIndex = -1
@@ -179,6 +208,32 @@ func checkAnd(err error, lastArgs int, args []string) error {
 	return nil
 }
 
+func separateRedirectSigns(args []string) []string {
+	newArgs := []string{}
+	for _, e := range args {
+		if string(e[0]) == "\"" {
+			newArgs = append(newArgs, e)
+			continue
+		}
+		redirectSignSeen := false
+		for i := 0; i < len(e); i++ {
+			if string(e[i]) == "<" || string(e[i]) == ">" {
+				redirectSignSeen = true
+				// https://stackoverflow.com/questions/55212090/string-splitting-before-character
+				newArgs = append(newArgs, e[:i])
+				newArgs = append(newArgs, string(e[i]))
+				if i+1 < len(e) {
+					newArgs = append(newArgs, e[i+1:])
+				}
+			}
+		}
+		if !redirectSignSeen {
+			newArgs = append(newArgs, e)
+		}
+	}
+	return newArgs
+}
+
 func execInput(input string) error {
 	// Remove the newline character.
 	input = strings.TrimSuffix(input, "\n")
@@ -186,6 +241,9 @@ func execInput(input string) error {
 
 	// Split the input separate the command and the arguments.
 	args := strings.Split(input, " ")
+
+	args = separateRedirectSigns(args)
+
 	// Check for built-in commands.
 	switch args[0] {
 	case "cd":
@@ -274,8 +332,18 @@ func execInput(input string) error {
 		if err != nil {
 			return err
 		}
+		resetRedirectIO()
+		err = checkRedirection(args)
+		if err != nil {
+			return err
+		}
+		names := []string{}
 		for _, e := range entries {
-			fmt.Println(e.Name())
+			names = append(names, e.Name())
+		}
+		err = lsRedirectIO(names, redirectOutput)
+		if err != nil {
+			return err
 		}
 		return checkAnd(nil, 0, args)
 	case "cat":
@@ -283,15 +351,16 @@ func execInput(input string) error {
 		if len(args) < 2 {
 			return ErrNoPath
 		}
+		resetRedirectIO()
 		err := checkRedirection(args)
 		if err != nil {
 			return err
 		}
 		if redirectInput != "" && redirectOutput == "" {
-			return redirectIO(redirectInput, redirectOutput)
+			return catRedirectIO(redirectInput, redirectOutput)
 		}
 		if redirectInput != "" && redirectOutput != "" {
-			return redirectIO(redirectInput, redirectOutput)
+			return catRedirectIO(redirectInput, redirectOutput)
 		}
 		if redirectInput == "" && redirectOutput != "" {
 			_, err := os.Stat(redirectOutput)
