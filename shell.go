@@ -136,16 +136,6 @@ func checkRedirection(args []string) error {
 	return nil
 }
 
-func getCommandArg(args []string) string {
-	commandArg := ""
-	if redirectOutputSignIndex+2 < len(args) {
-		commandArg = args[redirectOutputSignIndex+2]
-	} else if redirectInputSignIndex-2 >= 0 {
-		commandArg = args[redirectInputSignIndex-2]
-	}
-	return commandArg
-}
-
 func checkAnd(err error, lastArgs int, args []string) error {
 	if err != nil {
 		return err
