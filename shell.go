@@ -143,9 +143,11 @@ func execInput(input string) error {
 	// Check for built-in commands.
 	switch args[0] {
 	case "cd":
-		// 'cd' to home with empty path not yet supported.
 		if len(args) < 2 {
-			return ErrNoPath
+			return os.Chdir("/")
+		}
+		if args[1] == "&&" {
+			return checkAnd(os.Chdir("/"), 0, args)
 		}
 		// Change the directory and return the error.
 		return checkAnd(os.Chdir(args[1]), 1, args)
