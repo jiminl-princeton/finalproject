@@ -208,10 +208,9 @@ func execInput(input string) error {
 			fmt.Println()
 			return nil
 		}
-		split := strings.Split(input, "\"")
+		split := strings.SplitN(input, "\"", 3)
 		fmt.Println(split[1])
-		fmt.Println(split)
-		return checkAnd(nil, 1, split)
+		return checkAnd(nil, 0, strings.Split(split[2], " "))
 	case "ls":
 		// https://stackoverflow.com/questions/14668850/list-directory-in-go
 		entries, err := os.ReadDir("./")
