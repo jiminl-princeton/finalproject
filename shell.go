@@ -32,6 +32,7 @@ func main() {
 // ErrNoPath is returned when 'cd' was called without a second argument.
 var ErrNoPath = errors.New("path required")
 
+var ErrMultipleRedirection = errors.New("multiple redirection of standard output")
 var ErrInvalidCommand = errors.New("invalid command")
 
 var lastArgs = 0
@@ -65,8 +66,8 @@ func writeToFile(source, target string) error {
 }
 
 func redirectIO(args []string) error {
-	redirectInput := -1  // index of < symbol
-	redirectOutput := -1 // index of > symbol
+	redirectInput := 0  // index of <
+	redirectOutput := 0 // index of >
 	redirectInputSeen := false
 	redirectOutputSeen := false
 
@@ -77,35 +78,32 @@ func redirectIO(args []string) error {
 				redirectInputSeen = true
 				redirectInput = i
 			} else {
-				return ErrInvalidCommand
+				return ErrMultipleRedirection
 			}
 		} else if e == ">" {
 			if !redirectOutputSeen {
 				redirectOutputSeen = true
 				redirectOutput = i
 			} else {
-				return ErrInvalidCommand
+				return ErrMultipleRedirection
 			}
 		}
 	}
 
-	if redirectInput != -1 {
+	if redirectInputSeen {
 		if redirectInput+1 >= len(args) || redirectInput-1 < 0 {
-			return ErrNoPath
+			return ErrInvalidCommand
 		}
-		source := args[redirectInput+1]
-		target := args[redirectInput-1]
-		writeToFile(source, target)
 	}
 
-	if redirectOutput != -1 {
-		if redirectInput+1 >= len(args) || redirectInput-1 < 0 {
-			return ErrNoPath
+	if redirectOutputSeen {
+		if redirectOutput+1 >= len(args) || redirectOutput-1 < 0 {
+			return ErrInvalidCommand
 		}
-		source := args[redirectInput-1]
-		target := args[redirectInput+1]
-		writeToFile(source, target)
 	}
+
+	// input := args[redirectInput+1]   // follows <
+	// output := args[redirectOutput+1] // follows >
 
 	return nil
 }
