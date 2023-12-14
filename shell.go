@@ -67,38 +67,111 @@ func writeToDirectory(source, target string) {
 	fmt.Fprintf(newFile, "%s", string(origFile))
 }
 
-func redirectIO(source, target string) error {
-	// https://stackoverflow.com/questions/56075774/golang-os-renamefromdir-todir-not-working-in-windows
-	origFile, err := os.ReadFile(source)
-	if err != nil {
-		return err
-	}
-
-	// https://freshman.tech/snippets/go/check-if-file-is-dir/
-	_, err = os.Stat(source)
-	if err != nil {
-		return ErrNoPath
-	}
-
-	if target == "" {
-		fmt.Printf("%s\n", string(origFile))
+func lsRedirectIO(names []string) error {
+	if redirectOutput == "" {
+		for _, e := range names {
+			fmt.Println(e)
+		}
 		return nil
 	}
 
-	_, err = os.Stat(target)
+	_, err := os.Stat(redirectOutput)
 	if err == nil {
-		os.Remove(target)
+		os.Remove(redirectOutput)
 	}
-	newFile, err := os.Create(target)
+	newFile, err := os.Create(redirectOutput)
 	if err != nil {
 		return err
 	}
 
-	fmt.Fprintf(newFile, "%s", string(origFile))
+	for _, e := range names {
+		fmt.Fprintln(newFile, e)
+	}
+	return nil
+}
+
+func echoRedirectIO(s string) error {
+	if redirectOutput != "" {
+		_, err := os.Stat(redirectOutput)
+		if err == nil {
+			os.Remove(redirectOutput)
+		}
+		newFile, err := os.Create(redirectOutput)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(newFile, s)
+	} else {
+		fmt.Println(s)
+	}
+	return nil
+}
+
+func catRedirectIO(args []string) error {
+	if redirectInput != "" {
+		// https://freshman.tech/snippets/go/check-if-file-is-dir/
+		_, err := os.Stat(redirectInput)
+		if err != nil {
+			return ErrNoPath
+		}
+		// https://stackoverflow.com/questions/56075774/golang-os-renamefromdir-todir-not-working-in-windows
+		origFile, err := os.ReadFile(redirectInput)
+		if err != nil {
+			return err
+		}
+		if redirectOutput == "" {
+			fmt.Printf("%s\n", string(origFile))
+			return nil
+		}
+		_, err = os.Stat(redirectOutput)
+		if err == nil {
+			os.Remove(redirectOutput)
+		}
+		newFile, err := os.Create(redirectOutput)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(newFile, "%s", string(origFile))
+		return nil
+	}
+
+	if redirectOutput != "" {
+		_, err := os.Stat(redirectOutput)
+		if err == nil {
+			os.Remove(redirectOutput)
+		}
+		_, err = os.Create(redirectOutput)
+		return err
+	}
+
+	for i := 1; i < len(args); i++ {
+		file, err := os.Open(args[i])
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		rd := bufio.NewReader(file)
+		for {
+			line, err := rd.ReadString('\n')
+			if err == io.EOF {
+				fmt.Printf("%s\n", line)
+				break
+			}
+			if err != nil {
+				return err
+			}
+			fmt.Printf("%s", line)
+		}
+	}
+
 	return nil
 }
 
 func checkRedirection(args []string) error {
+	redirectInput = ""
+	redirectOutput = ""
+	redirectInputSignIndex = -1
+	redirectOutputSignIndex = -1
 	redirectInputSeen := false
 	redirectOutputSeen := false
 
@@ -129,7 +202,6 @@ func checkRedirection(args []string) error {
 		}
 		redirectInput = args[redirectInputSignIndex+1]
 	}
-
 	if redirectOutputSeen {
 		if redirectOutputSignIndex+1 >= len(args) || redirectOutputSignIndex-1 < 0 {
 			redirectInputSignIndex = -1
@@ -138,7 +210,7 @@ func checkRedirection(args []string) error {
 		}
 		redirectOutput = args[redirectOutputSignIndex+1]
 	}
-	if !redirectInputSeen {
+	if !redirectInputSeen && redirectOutputSeen {
 		if redirectOutputSignIndex-1 < 0 {
 			redirectInputSignIndex = -1
 			redirectOutputSignIndex = -1
@@ -154,16 +226,6 @@ func checkRedirection(args []string) error {
 		}
 	}
 	return nil
-}
-
-func getCommandArg(args []string) string {
-	commandArg := ""
-	if redirectOutputSignIndex+2 < len(args) {
-		commandArg = args[redirectOutputSignIndex+2]
-	} else if redirectInputSignIndex-2 >= 0 {
-		commandArg = args[redirectInputSignIndex-2]
-	}
-	return commandArg
 }
 
 func checkAnd(err error, lastArgs int, args []string) error {
@@ -182,6 +244,32 @@ func checkAnd(err error, lastArgs int, args []string) error {
 	return nil
 }
 
+func separateRedirectSigns(args []string) []string {
+	newArgs := []string{}
+	for _, e := range args {
+		if string(e[0]) == "\"" || e == "<" || e == ">" {
+			newArgs = append(newArgs, e)
+			continue
+		}
+		redirectSignSeen := false
+		for i := 0; i < len(e); i++ {
+			if string(e[i]) == "<" || string(e[i]) == ">" {
+				redirectSignSeen = true
+				// https://stackoverflow.com/questions/55212090/string-splitting-before-character
+				newArgs = append(newArgs, e[:i])
+				newArgs = append(newArgs, string(e[i]))
+				if i+1 < len(e) {
+					newArgs = append(newArgs, e[i+1:])
+				}
+			}
+		}
+		if !redirectSignSeen {
+			newArgs = append(newArgs, e)
+		}
+	}
+	return newArgs
+}
+
 func execInput(input string) error {
 	// Remove the newline character.
 	input = strings.TrimSuffix(input, "\n")
@@ -189,6 +277,9 @@ func execInput(input string) error {
 
 	// Split the input separate the command and the arguments.
 	args := strings.Split(input, " ")
+
+	args = separateRedirectSigns(args)
+
 	// Check for built-in commands.
 	switch args[0] {
 	case "cd":
@@ -268,8 +359,15 @@ func execInput(input string) error {
 			fmt.Println()
 			return nil
 		}
+		err := checkRedirection(args)
+		if err != nil {
+			return err
+		}
 		split := strings.SplitN(input, "\"", 3)
-		fmt.Println(split[1])
+		err = echoRedirectIO(split[1])
+		if err != nil {
+			return err
+		}
 		return checkAnd(nil, 0, strings.Split(split[2], " "))
 	case "ls":
 		// https://stackoverflow.com/questions/14668850/list-directory-in-go
@@ -277,8 +375,17 @@ func execInput(input string) error {
 		if err != nil {
 			return err
 		}
+		err = checkRedirection(args)
+		if err != nil {
+			return err
+		}
+		names := []string{}
 		for _, e := range entries {
-			fmt.Println(e.Name())
+			names = append(names, e.Name())
+		}
+		err = lsRedirectIO(names)
+		if err != nil {
+			return err
 		}
 		return checkAnd(nil, 0, args)
 	case "cat":
@@ -290,38 +397,9 @@ func execInput(input string) error {
 		if err != nil {
 			return err
 		}
-		if redirectInput != "" && redirectOutput == "" {
-			return redirectIO(redirectInput, redirectOutput)
-		}
-		if redirectInput != "" && redirectOutput != "" {
-			return redirectIO(redirectInput, redirectOutput)
-		}
-		if redirectInput == "" && redirectOutput != "" {
-			_, err := os.Stat(redirectOutput)
-			if err == nil {
-				os.Remove(redirectOutput)
-			}
-			_, err = os.Create(redirectOutput)
+		err = catRedirectIO(args)
+		if err != nil {
 			return err
-		}
-		for i := 1; i < len(args); i++ {
-			file, err := os.Open(args[i])
-			if err != nil {
-				return err
-			}
-			defer file.Close()
-			rd := bufio.NewReader(file)
-			for {
-				line, err := rd.ReadString('\n')
-				if err == io.EOF {
-					fmt.Printf("%s\n", line)
-					break
-				}
-				if err != nil {
-					return err
-				}
-				fmt.Printf("%s", line)
-			}
 		}
 		return checkAnd(nil, 1, args)
 	case "kill":

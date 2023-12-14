@@ -1,3 +1,6 @@
-hello
-this is a
+.DS_Store
+.git
+shell.go
 test
+test1.txt
+test2.txt
