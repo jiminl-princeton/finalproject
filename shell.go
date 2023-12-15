@@ -20,7 +20,6 @@ func main() {
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 		}
-
 		input = strings.TrimSuffix(input, "\n")
 		input = strings.TrimSuffix(input, " ")
 		args := strings.Split(input, " ")
