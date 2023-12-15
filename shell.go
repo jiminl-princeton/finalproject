@@ -16,29 +16,24 @@ func main() {
 	fmt.Print("> ")
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		Loop(reader)
-	}
-}
-
-func Loop(reader *bufio.Reader) {
-	// Read the keyboad input.
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-	}
-
-	input = strings.TrimSuffix(input, "\n")
-	input = strings.TrimSuffix(input, " ")
-	args := strings.Split(input, " ")
-	if args[len(args)-1] == "&" {
-		input2 := ""
-		for i := 0; i < len(args)-1; i++ {
-			input2 = input2 + args[i] + " "
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 		}
-		go PrintError(input)
-		fmt.Print("> ")
-	} else { // Handle the execution of the input.
-		PrintError(input)
+	
+		input = strings.TrimSuffix(input, "\n")
+		input = strings.TrimSuffix(input, " ")
+		args := strings.Split(input, " ")
+		if args[len(args)-1] == "&" {
+			input2 := ""
+			for i := 0; i < len(args)-1; i++ {
+				input2 = input2 + args[i] + " "
+			}
+			go PrintError(input)
+			fmt.Print("> ")
+		} else { // Handle the execution of the input.
+			PrintError(input)
+		}
 	}
 }
 
