@@ -52,8 +52,6 @@ var ErrInvalidCommand = errors.New("invalid command")
 
 var redirectInput = ""
 var redirectOutput = ""
-var redirectInputSignIndex = -1  // index of <
-var redirectOutputSignIndex = -1 // index of >
 
 func writeToDirectory(source, target string) {
 	// https://stackoverflow.com/questions/56075774/golang-os-renamefromdir-todir-not-working-in-windows
@@ -62,7 +60,7 @@ func writeToDirectory(source, target string) {
 	fmt.Fprintf(newFile, "%s", string(origFile))
 }
 
-func lsRedirectIO(names []string) error {
+func lsRedirectIO(redirectOutput string, names []string) error {
 	if redirectOutput == "" {
 		for _, e := range names {
 			fmt.Println(e)
@@ -85,7 +83,7 @@ func lsRedirectIO(names []string) error {
 	return nil
 }
 
-func echoRedirectIO(s string) error {
+func echoRedirectIO(redirectInput, redirectOutput, s string) error {
 	if redirectOutput != "" {
 		_, err := os.Stat(redirectOutput)
 		if err == nil {
@@ -102,8 +100,8 @@ func echoRedirectIO(s string) error {
 	return nil
 }
 
-func catRedirectIO(args []string) error {
-	if redirectInput != "" {
+func catRedirectIO(redirectInput string, redirectOutput string, args []string) error {
+	if redirectInput != "" && redirectOutput != "" {
 		// https://freshman.tech/snippets/go/check-if-file-is-dir/
 		_, err := os.Stat(redirectInput)
 		if err != nil {
@@ -114,10 +112,6 @@ func catRedirectIO(args []string) error {
 		if err != nil {
 			return err
 		}
-		if redirectOutput == "" {
-			fmt.Printf("%s\n", string(origFile))
-			return nil
-		}
 		_, err = os.Stat(redirectOutput)
 		if err == nil {
 			os.Remove(redirectOutput)
@@ -127,10 +121,9 @@ func catRedirectIO(args []string) error {
 			return err
 		}
 		fmt.Fprintf(newFile, "%s", string(origFile))
-		return nil
 	}
 
-	if redirectOutput != "" {
+	if redirectInput == "" && redirectOutput != "" {
 		_, err := os.Stat(redirectOutput)
 		if err == nil {
 			os.Remove(redirectOutput)
@@ -139,34 +132,69 @@ func catRedirectIO(args []string) error {
 		return err
 	}
 
-	for i := 1; i < len(args); i++ {
-		file, err := os.Open(args[i])
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-		rd := bufio.NewReader(file)
-		for {
-			line, err := rd.ReadString('\n')
-			if err == io.EOF {
-				fmt.Printf("%s\n", line)
+	if redirectInput == "" && redirectOutput == "" {
+		for i := 1; i < len(args); i++ {
+			if args[i] == "<" {
 				break
 			}
+			file, err := os.Open(args[i])
 			if err != nil {
 				return err
 			}
-			fmt.Printf("%s", line)
+			defer file.Close()
+			rd := bufio.NewReader(file)
+			for {
+				line, err := rd.ReadString('\n')
+				if err == io.EOF {
+					fmt.Printf("%s\n", line)
+					break
+				}
+				if err != nil {
+					return err
+				}
+				fmt.Printf("%s", line)
+			}
+		}
+	}
+
+	if redirectInput != "" && redirectOutput == "" {
+		for i := 1; i < len(args); i++ {
+			if args[i] == "<" {
+				continue
+			}
+			if i-1 >= 0 {
+				if args[i-1] == "<" {
+					continue
+				}
+			}
+			file, err := os.Open(args[i])
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+			rd := bufio.NewReader(file)
+			for {
+				line, err := rd.ReadString('\n')
+				if err == io.EOF {
+					fmt.Printf("%s\n", line)
+					break
+				}
+				if err != nil {
+					return err
+				}
+				fmt.Printf("%s", line)
+			}
 		}
 	}
 
 	return nil
 }
 
-func checkRedirection(args []string) error {
-	redirectInput = ""
-	redirectOutput = ""
-	redirectInputSignIndex = -1
-	redirectOutputSignIndex = -1
+func checkRedirection(args []string) (string, string, error) {
+	redirectInput := ""
+	redirectOutput := ""
+	redirectInputSignIndex := -1
+	redirectOutputSignIndex := -1
 	redirectInputSeen := false
 	redirectOutputSeen := false
 
@@ -177,50 +205,41 @@ func checkRedirection(args []string) error {
 				redirectInputSeen = true
 				redirectInputSignIndex = i
 			} else {
-				return ErrMultipleRedirection
+				return redirectInput, redirectOutput, ErrMultipleRedirection
 			}
 		} else if e == ">" {
 			if !redirectOutputSeen {
 				redirectOutputSeen = true
 				redirectOutputSignIndex = i
 			} else {
-				return ErrMultipleRedirection
+				return redirectInput, redirectOutput, ErrMultipleRedirection
 			}
 		}
 	}
 
 	if redirectInputSeen {
 		if redirectInputSignIndex+1 >= len(args) || redirectInputSignIndex-1 < 0 {
-			redirectInputSignIndex = -1
-			redirectOutputSignIndex = -1
-			return ErrInvalidCommand
+			return redirectInput, redirectOutput, ErrInvalidCommand
 		}
 		redirectInput = args[redirectInputSignIndex+1]
 	}
 	if redirectOutputSeen {
 		if redirectOutputSignIndex+1 >= len(args) || redirectOutputSignIndex-1 < 0 {
-			redirectInputSignIndex = -1
-			redirectOutputSignIndex = -1
-			return ErrInvalidCommand
+			return redirectInput, redirectOutput, ErrInvalidCommand
 		}
 		redirectOutput = args[redirectOutputSignIndex+1]
 	}
 	if !redirectInputSeen && redirectOutputSeen {
 		if redirectOutputSignIndex-1 < 0 {
-			redirectInputSignIndex = -1
-			redirectOutputSignIndex = -1
-			return ErrInvalidCommand
+			return redirectInput, redirectOutput, ErrInvalidCommand
 		}
 		if redirectOutputSignIndex-1 > 0 {
 			redirectInput = args[redirectOutputSignIndex-1]
-			return nil
-		}
-		if redirectOutputSignIndex+2 < len(args) {
+		} else if redirectOutputSignIndex+2 < len(args) {
 			redirectInput = args[redirectOutputSignIndex+2]
-			return nil
 		}
 	}
-	return nil
+	return redirectInput, redirectOutput, nil
 }
 
 func checkPiping(args []string) {
@@ -302,7 +321,10 @@ func separateSpecialSigns(args []string) []string {
 			if string(e[i]) == "<" || string(e[i]) == ">" || string(e[i]) == "|" {
 				specialSignSeen = true
 				// https://stackoverflow.com/questions/55212090/string-splitting-before-character
-				newArgs = append(newArgs, e[:i])
+				// https://www.tutorialspoint.com/how-to-trim-a-string-in-golang#:~:text=Using%20the%20strings.,trailing%20whitespace%20from%20a%20string.
+				if i != 0 {
+					newArgs = append(newArgs, e[:i])
+				}
 				newArgs = append(newArgs, string(e[i]))
 				if i+1 < len(e) {
 					newArgs = append(newArgs, e[i+1:])
@@ -375,11 +397,11 @@ func execInput(input string) error {
 		}
 		return checkAnd(os.Remove(args[1]), 1, args)
 	case "getpid":
-		err := checkRedirection(args)
+		redirectInput, redirectOutput, err := checkRedirection(args)
 		if err != nil {
 			return err
 		}
-		err = echoRedirectIO(fmt.Sprint(os.Getpid()))
+		err = echoRedirectIO(redirectInput, redirectOutput, fmt.Sprint(os.Getpid()))
 		if err != nil {
 			return err
 		}
@@ -403,11 +425,11 @@ func execInput(input string) error {
 		if value == "" {
 			return nil
 		}
-		err := checkRedirection(args)
+		redirectInput, redirectOutput, err := checkRedirection(args)
 		if err != nil {
 			return err
 		}
-		err = echoRedirectIO(value)
+		err = echoRedirectIO(redirectInput, redirectOutput, value)
 		if err != nil {
 			return err
 		}
@@ -422,12 +444,15 @@ func execInput(input string) error {
 			fmt.Println()
 			return nil
 		}
-		err := checkRedirection(args)
+		redirectInput, redirectOutput, err := checkRedirection(args)
 		if err != nil {
 			return err
 		}
 		split := strings.SplitN(input, "\"", 3)
-		err = echoRedirectIO(split[1])
+		if len(split) == 1 {
+			return ErrInvalidCommand
+		}
+		err = echoRedirectIO(redirectInput, redirectOutput, split[1])
 		if err != nil {
 			return err
 		}
@@ -438,7 +463,7 @@ func execInput(input string) error {
 		if err != nil {
 			return err
 		}
-		err = checkRedirection(args)
+		_, redirectOutput, err := checkRedirection(args)
 		if err != nil {
 			return err
 		}
@@ -446,7 +471,7 @@ func execInput(input string) error {
 		for _, e := range entries {
 			names = append(names, e.Name())
 		}
-		err = lsRedirectIO(names)
+		err = lsRedirectIO(redirectOutput, names)
 		if err != nil {
 			return err
 		}
@@ -456,11 +481,11 @@ func execInput(input string) error {
 		if len(args) < 2 {
 			return ErrNoPath
 		}
-		err := checkRedirection(args)
+		redirectInput, redirectOutput, err := checkRedirection(args)
 		if err != nil {
 			return err
 		}
-		err = catRedirectIO(args)
+		err = catRedirectIO(redirectInput, redirectOutput, args)
 		if err != nil {
 			return err
 		}
