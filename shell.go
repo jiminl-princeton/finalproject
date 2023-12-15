@@ -188,7 +188,18 @@ func execInput(input string) error {
 		if len(args) < 2 {
 			return ErrNoPath
 		}
-		return checkAnd(os.Remove(args[1]), 1, args)
+		rememberI := 1
+		for i := 1; i < len(args); i++ {
+			rememberI = i
+			if args[i] == "&&" {
+				break
+			}
+			err := os.Remove(args[i])
+			if err != nil {
+				return err
+			}
+		}
+		return checkAnd(nil, rememberI-1, args)
 	case "getpid":
 		output[0] = fmt.Sprint(os.Getpid())
 		err := handleOutput(output, 0, args)
