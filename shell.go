@@ -49,9 +49,6 @@ var ErrNoPath = errors.New("path required")
 var ErrMultipleRedirection = errors.New("multiple redirection of standard output")
 var ErrInvalidCommand = errors.New("invalid command")
 
-var redirectInput = ""
-var redirectOutput = ""
-
 func writeToDirectory(source, target string) {
 	// https://stackoverflow.com/questions/56075774/golang-os-renamefromdir-todir-not-working-in-windows
 	origFile, _ := os.ReadFile(source)
