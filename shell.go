@@ -70,13 +70,16 @@ func handleOutput(output []string, lastArgs int, args []string) error {
 			input2 := ""
 			for i := lastArgs + 2; i < len(args); i++ {
 				if first {
-					input2 = input2 + args[i] + " "
+					input2 = input2 + args[i]
 					if args[i] == "echo" {
 						echo = true
-						input2 = input2 + "\""
+						input2 = input2 + " \""
 					}
 					for i := 0; i < len(output); i++ {
-						input2 = input2 + output[i] + " "
+						input2 = input2 + output[i]
+						if i < len(output)-1 {
+							input2 = input2 + "\n"
+						}
 					}
 					if echo {
 						input2 = input2 + "\""
@@ -87,10 +90,7 @@ func handleOutput(output []string, lastArgs int, args []string) error {
 			}
 			return execInput(input2)
 		}
-		redirectInput, redirectOutput, err := checkRedirection(args)
-		if redirectInput == "" {
-
-		}
+		redirectOutput, err := checkRedirection(args)
 		if err != nil {
 			return err
 		}
@@ -104,13 +104,17 @@ func handleOutput(output []string, lastArgs int, args []string) error {
 				return err
 			}
 			for i := 0; i < len(output); i++ {
-				fmt.Fprintf(newFile, output[i])
+				if i < len(output)-1 {
+					fmt.Fprintln(newFile, output[i])
+				} else {
+					fmt.Fprintf(newFile, output[i])
+				}
 			}
 			return nil
 		}
 	}
 	for i := 0; i < len(output); i++ {
-		fmt.Print(output[i])
+		fmt.Println(output[i])
 	}
 	return nil
 }
@@ -144,7 +148,7 @@ func execInput(input string) error {
 		if err != nil {
 			return err
 		}
-		output[0] = wd + "\n"
+		output[0] = wd
 		err = handleOutput(output, 0, args)
 		if err != nil {
 			return err
@@ -183,7 +187,7 @@ func execInput(input string) error {
 		}
 		return checkAnd(os.Remove(args[1]), 1, args)
 	case "getpid":
-		output[0] = fmt.Sprint(os.Getpid()) + "\n"
+		output[0] = fmt.Sprint(os.Getpid())
 		err := handleOutput(output, 0, args)
 		if err != nil {
 			return err
@@ -208,7 +212,7 @@ func execInput(input string) error {
 		if value == "" {
 			return nil
 		}
-		output[0] = value + "\n"
+		output[0] = value
 		err := handleOutput(output, 1, args)
 		if err != nil {
 			return err
@@ -225,7 +229,7 @@ func execInput(input string) error {
 			return nil
 		}
 		split := strings.SplitN(input, "\"", 3)
-		output[0] = split[1] + "\n"
+		output[0] = split[1]
 		err := handleOutput(output, 0, strings.Split(split[2], " "))
 		if err != nil {
 			return err
@@ -240,10 +244,10 @@ func execInput(input string) error {
 		first := true
 		for _, e := range entries {
 			if first {
-				output[0] = e.Name() + "\n"
+				output[0] = e.Name()
 				first = false
 			} else {
-				output = append(output, e.Name()+"\n")
+				output = append(output, e.Name())
 			}
 		}
 		err = handleOutput(output, 0, args)
@@ -278,9 +282,9 @@ func execInput(input string) error {
 				line, err := rd.ReadString('\n')
 				if err == io.EOF {
 					if first {
-						output[0] = line
+						output[0] = strings.TrimSuffix(line, "\n")
 					} else {
-						output = append(output, line)
+						output = append(output, strings.TrimSuffix(line, "\n"))
 					}
 					break
 				}
@@ -288,10 +292,10 @@ func execInput(input string) error {
 					return err
 				}
 				if first {
-					output[0] = line
+					output[0] = strings.TrimSuffix(line, "\n")
 					first = false
 				} else {
-					output = append(output, line)
+					output = append(output, strings.TrimSuffix(line, "\n"))
 				}
 			}
 		}
@@ -401,54 +405,28 @@ func separateSpecialSigns(args []string) []string {
 	return newArgs
 }
 
-func checkRedirection(args []string) (string, string, error) {
-	redirectInput := ""
+func checkRedirection(args []string) (string, error) {
 	redirectOutput := ""
-	redirectInputSignIndex := -1
 	redirectOutputSignIndex := -1
-	redirectInputSeen := false
 	redirectOutputSeen := false
 
 	// check if there is more than one of the same redirection symbol
 	for i, e := range args {
-		if e == "<" {
-			if !redirectInputSeen {
-				redirectInputSeen = true
-				redirectInputSignIndex = i
-			} else {
-				return redirectInput, redirectOutput, ErrMultipleRedirection
-			}
-		} else if e == ">" {
+		if e == ">" {
 			if !redirectOutputSeen {
 				redirectOutputSeen = true
 				redirectOutputSignIndex = i
 			} else {
-				return redirectInput, redirectOutput, ErrMultipleRedirection
+				return redirectOutput, ErrMultipleRedirection
 			}
 		}
 	}
 
-	if redirectInputSeen {
-		if redirectInputSignIndex+1 >= len(args) || redirectInputSignIndex-1 < 0 {
-			return redirectInput, redirectOutput, ErrInvalidCommand
-		}
-		redirectInput = args[redirectInputSignIndex+1]
-	}
 	if redirectOutputSeen {
 		if redirectOutputSignIndex+1 >= len(args) || redirectOutputSignIndex-1 < 0 {
-			return redirectInput, redirectOutput, ErrInvalidCommand
+			return redirectOutput, ErrInvalidCommand
 		}
 		redirectOutput = args[redirectOutputSignIndex+1]
 	}
-	if !redirectInputSeen && redirectOutputSeen {
-		if redirectOutputSignIndex-1 < 0 {
-			return redirectInput, redirectOutput, ErrInvalidCommand
-		}
-		if redirectOutputSignIndex-1 > 0 {
-			redirectInput = args[redirectOutputSignIndex-1]
-		} else if redirectOutputSignIndex+2 < len(args) {
-			redirectInput = args[redirectOutputSignIndex+2]
-		}
-	}
-	return redirectInput, redirectOutput, nil
+	return redirectOutput, nil
 }
