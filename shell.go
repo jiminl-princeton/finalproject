@@ -16,29 +16,24 @@ func main() {
 	fmt.Print("> ")
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		Loop(reader)
-	}
-}
-
-func Loop(reader *bufio.Reader) {
-	// Read the keyboad input.
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-	}
-
-	input = strings.TrimSuffix(input, "\n")
-	input = strings.TrimSuffix(input, " ")
-	args := strings.Split(input, " ")
-	if args[len(args)-1] == "&" {
-		input2 := ""
-		for i := 0; i < len(args)-1; i++ {
-			input2 = input2 + args[i] + " "
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 		}
-		go PrintError(input)
-		fmt.Print("> ")
-	} else { // Handle the execution of the input.
-		PrintError(input)
+
+		input = strings.TrimSuffix(input, "\n")
+		input = strings.TrimSuffix(input, " ")
+		args := strings.Split(input, " ")
+		if args[len(args)-1] == "&" {
+			input2 := ""
+			for i := 0; i < len(args)-1; i++ {
+				input2 = input2 + args[i] + " "
+			}
+			go PrintError(input)
+			fmt.Print("> ")
+		} else { // Handle the execution of the input.
+			PrintError(input)
+		}
 	}
 }
 
@@ -228,6 +223,10 @@ func checkRedirection(args []string) error {
 	return nil
 }
 
+func checkPiping(args []string) {
+
+}
+
 func checkAnd(err error, lastArgs int, args []string) error {
 	if err != nil {
 		return err
@@ -267,7 +266,7 @@ func getKeyValue(args []string) ([]string, error) {
 	return keyval, nil
 }
 
-func separateRedirectSigns(args []string) []string {
+func separateSpecialSigns(args []string) []string {
 	newArgs := []string{}
 	tmpArgs := []string{}
 	for _, e := range args {
@@ -294,14 +293,14 @@ func separateRedirectSigns(args []string) []string {
 		}
 	}
 	for _, e := range tmpArgs {
-		if string(e[0]) == "\"" || e == "<" || e == ">" {
+		if string(e[0]) == "\"" || e == "<" || e == ">" || e == "|" {
 			newArgs = append(newArgs, e)
 			continue
 		}
-		redirectSignSeen := false
+		specialSignSeen := false
 		for i := 0; i < len(e); i++ {
-			if string(e[i]) == "<" || string(e[i]) == ">" {
-				redirectSignSeen = true
+			if string(e[i]) == "<" || string(e[i]) == ">" || string(e[i]) == "|" {
+				specialSignSeen = true
 				// https://stackoverflow.com/questions/55212090/string-splitting-before-character
 				newArgs = append(newArgs, e[:i])
 				newArgs = append(newArgs, string(e[i]))
@@ -310,7 +309,7 @@ func separateRedirectSigns(args []string) []string {
 				}
 			}
 		}
-		if !redirectSignSeen {
+		if !specialSignSeen {
 			newArgs = append(newArgs, e)
 		}
 	}
@@ -325,7 +324,7 @@ func execInput(input string) error {
 	// Split the input separate the command and the arguments.
 	args := strings.Split(input, " ")
 
-	args = separateRedirectSigns(args)
+	args = separateSpecialSigns(args)
 
 	// Check for built-in commands.
 	switch args[0] {
