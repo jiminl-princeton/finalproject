@@ -90,10 +90,7 @@ func handleOutput(output []string, lastArgs int, args []string) error {
 			}
 			return execInput(input2)
 		}
-		redirectInput, redirectOutput, err := checkRedirection(args)
-		if redirectInput == "" {
-
-		}
+		redirectOutput, err := checkRedirection(args)
 		if err != nil {
 			return err
 		}
@@ -408,54 +405,28 @@ func separateSpecialSigns(args []string) []string {
 	return newArgs
 }
 
-func checkRedirection(args []string) (string, string, error) {
-	redirectInput := ""
+func checkRedirection(args []string) (string, error) {
 	redirectOutput := ""
-	redirectInputSignIndex := -1
 	redirectOutputSignIndex := -1
-	redirectInputSeen := false
 	redirectOutputSeen := false
 
 	// check if there is more than one of the same redirection symbol
 	for i, e := range args {
-		if e == "<" {
-			if !redirectInputSeen {
-				redirectInputSeen = true
-				redirectInputSignIndex = i
-			} else {
-				return redirectInput, redirectOutput, ErrMultipleRedirection
-			}
-		} else if e == ">" {
+		if e == ">" {
 			if !redirectOutputSeen {
 				redirectOutputSeen = true
 				redirectOutputSignIndex = i
 			} else {
-				return redirectInput, redirectOutput, ErrMultipleRedirection
+				return redirectOutput, ErrMultipleRedirection
 			}
 		}
 	}
 
-	if redirectInputSeen {
-		if redirectInputSignIndex+1 >= len(args) || redirectInputSignIndex-1 < 0 {
-			return redirectInput, redirectOutput, ErrInvalidCommand
-		}
-		redirectInput = args[redirectInputSignIndex+1]
-	}
 	if redirectOutputSeen {
 		if redirectOutputSignIndex+1 >= len(args) || redirectOutputSignIndex-1 < 0 {
-			return redirectInput, redirectOutput, ErrInvalidCommand
+			return redirectOutput, ErrInvalidCommand
 		}
 		redirectOutput = args[redirectOutputSignIndex+1]
 	}
-	if !redirectInputSeen && redirectOutputSeen {
-		if redirectOutputSignIndex-1 < 0 {
-			return redirectInput, redirectOutput, ErrInvalidCommand
-		}
-		if redirectOutputSignIndex-1 > 0 {
-			redirectInput = args[redirectOutputSignIndex-1]
-		} else if redirectOutputSignIndex+2 < len(args) {
-			redirectInput = args[redirectOutputSignIndex+2]
-		}
-	}
-	return redirectInput, redirectOutput, nil
+	return redirectOutput, nil
 }
