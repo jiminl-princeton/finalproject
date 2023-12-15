@@ -265,45 +265,44 @@ func execInput(input string) error {
 			return ErrNoPath
 		}
 		first := true
-		if args[1] == "<" {
-			redirectInput, err := checkInputRedirection(args)
+		redirectInput, err := checkInputRedirection(args)
+		if err != nil {
+			return err
+		}
+		if redirectInput != "" {
+			file, err := os.Open(redirectInput)
 			if err != nil {
 				return err
 			}
-			if redirectInput != "" {
-				file, err := os.Open(redirectInput)
-				if err != nil {
-					return err
-				}
-				defer file.Close()
-				rd := bufio.NewReader(file)
-				for {
-					line, err := rd.ReadString('\n')
-					if err == io.EOF {
-						if first {
-							output[0] = strings.TrimSuffix(line, "\n")
-						} else {
-							output = append(output, strings.TrimSuffix(line, "\n"))
-						}
-						break
-					}
-					if err != nil {
-						return err
-					}
+			defer file.Close()
+			rd := bufio.NewReader(file)
+			for {
+				line, err := rd.ReadString('\n')
+				if err == io.EOF {
 					if first {
 						output[0] = strings.TrimSuffix(line, "\n")
-						first = false
 					} else {
 						output = append(output, strings.TrimSuffix(line, "\n"))
 					}
+					break
 				}
-				err = handleOutput(output, 2, args)
 				if err != nil {
 					return err
 				}
-				return checkAnd(nil, 2, args)
+				if first {
+					output[0] = strings.TrimSuffix(line, "\n")
+					first = false
+				} else {
+					output = append(output, strings.TrimSuffix(line, "\n"))
+				}
 			}
+			err = handleOutput(output, 2, args)
+			if err != nil {
+				return err
+			}
+			return checkAnd(nil, 2, args)
 		}
+
 		for i := 1; i < len(args); i++ {
 			if args[i] == "|" {
 				break
@@ -344,7 +343,7 @@ func execInput(input string) error {
 				}
 			}
 		}
-		err := handleOutput(output, 1, args)
+		err = handleOutput(output, 1, args)
 		if err != nil {
 			return err
 		}
@@ -494,12 +493,13 @@ func checkInputRedirection(args []string) (string, error) {
 			}
 		}
 	}
-
+	fmt.Println(args)
 	if redirectInputSeen {
 		if redirectInputSignIndex+1 >= len(args) || redirectInputSignIndex-1 < 0 {
 			return redirectInput, ErrInvalidCommand
 		}
 		redirectInput = args[redirectInputSignIndex+1]
+		fmt.Println(redirectInput)
 	}
 	return redirectInput, nil
 }
