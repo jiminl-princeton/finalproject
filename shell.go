@@ -428,21 +428,24 @@ func separateSpecialSigns(args []string) []string {
 			continue
 		}
 		specialSignSeen := false
+		index := 0
 		for i := 0; i < len(e); i++ {
 			if string(e[i]) == "<" || string(e[i]) == ">" || string(e[i]) == "|" || string(e[i]) == "=" {
 				specialSignSeen = true
 				// https://stackoverflow.com/questions/55212090/string-splitting-before-character
 				// https://www.tutorialspoint.com/how-to-trim-a-string-in-golang#:~:text=Using%20the%20strings.,trailing%20whitespace%20from%20a%20string.
 				if i != 0 {
-					newArgs = append(newArgs, e[:i])
+					newArgs = append(newArgs, e[index+1:i])
 				}
 				newArgs = append(newArgs, string(e[i]))
-				if i+1 < len(e) {
-					newArgs = append(newArgs, e[i+1:])
-				}
+				index = i
 			}
 		}
-		if !specialSignSeen {
+		if specialSignSeen {
+			if index+1 < len(e) {
+				newArgs = append(newArgs, e[index+1:])
+			}
+		} else {
 			newArgs = append(newArgs, e)
 		}
 	}
