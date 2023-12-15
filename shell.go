@@ -278,9 +278,9 @@ func execInput(input string) error {
 				line, err := rd.ReadString('\n')
 				if err == io.EOF {
 					if first {
-						output[0] = line + "\n"
+						output[0] = line
 					} else {
-						output = append(output, line+"\n")
+						output = append(output, line)
 					}
 					break
 				}
