@@ -93,28 +93,28 @@ func handleOutput(output []string, lastArgs int, args []string) error {
 			}
 			return execInput(input2)
 		}
-		redirectOutput, err := checkRedirection(args)
+	}
+	redirectOutput, err := checkRedirection(args)
+	if err != nil {
+		return err
+	}
+	if redirectOutput != "" {
+		_, err := os.Stat(redirectOutput)
+		if err == nil {
+			os.Remove(redirectOutput)
+		}
+		newFile, err := os.Create(redirectOutput)
 		if err != nil {
 			return err
 		}
-		if redirectOutput != "" {
-			_, err := os.Stat(redirectOutput)
-			if err == nil {
-				os.Remove(redirectOutput)
+		for i := 0; i < len(output); i++ {
+			if i < len(output)-1 {
+				fmt.Fprintln(newFile, output[i])
+			} else {
+				fmt.Fprintf(newFile, output[i])
 			}
-			newFile, err := os.Create(redirectOutput)
-			if err != nil {
-				return err
-			}
-			for i := 0; i < len(output); i++ {
-				if i < len(output)-1 {
-					fmt.Fprintln(newFile, output[i])
-				} else {
-					fmt.Fprintf(newFile, output[i])
-				}
-			}
-			return nil
 		}
+		return nil
 	}
 	for i := 0; i < len(output); i++ {
 		fmt.Println(output[i])
@@ -302,16 +302,24 @@ func execInput(input string) error {
 			}
 			return checkAnd(nil, 2, args)
 		}
-
+		rememberI := 0
 		for i := 1; i < len(args); i++ {
 			if args[i] == "|" {
 				break
 			}
 			if args[i] == "<" {
-				break
+				i += 2
+				if i >= len(args) {
+					rememberI = i - 1
+					break
+				}
 			}
 			if args[i] == ">" {
-				break
+				i += 2
+				if i >= len(args) {
+					rememberI = i - 1
+					break
+				}
 			}
 			if args[i] == "&&" {
 				break
@@ -342,12 +350,13 @@ func execInput(input string) error {
 					output = append(output, strings.TrimSuffix(line, "\n"))
 				}
 			}
+			rememberI = i
 		}
-		err = handleOutput(output, 1, args)
+		err = handleOutput(output, rememberI, args)
 		if err != nil {
 			return err
 		}
-		return checkAnd(nil, 1, args)
+		return checkAnd(nil, rememberI, args)
 	case "kill":
 		process, err := os.FindProcess(os.Getpid())
 		if err != nil {
@@ -493,13 +502,11 @@ func checkInputRedirection(args []string) (string, error) {
 			}
 		}
 	}
-	fmt.Println(args)
 	if redirectInputSeen {
 		if redirectInputSignIndex+1 >= len(args) || redirectInputSignIndex-1 < 0 {
 			return redirectInput, ErrInvalidCommand
 		}
 		redirectInput = args[redirectInputSignIndex+1]
-		fmt.Println(redirectInput)
 	}
 	return redirectInput, nil
 }
