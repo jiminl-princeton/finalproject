@@ -1,3 +1,5 @@
+// https://hackernoon.com/today-i-learned-making-a-simple-interactive-shell-application-in-golang-aa83adcb266a
+
 package main
 
 import (
@@ -31,6 +33,7 @@ func main() {
 			for i := 0; i < len(args)-1; i++ {
 				input2 = input2 + args[i] + " "
 			}
+			// https://medium.com/@matryer/very-basic-concurrency-for-beginners-in-go-663e63c6ba07
 			go PrintError(input)
 			fmt.Print("> ")
 		} else { // Handle the execution of the input.
@@ -261,6 +264,46 @@ func execInput(input string) error {
 		if len(args) < 2 {
 			return ErrNoPath
 		}
+		first := true
+		if args[1] == "<" {
+			redirectInput, err := checkInputRedirection(args)
+			if err != nil {
+				return err
+			}
+			if redirectInput != "" {
+				file, err := os.Open(redirectInput)
+				if err != nil {
+					return err
+				}
+				defer file.Close()
+				rd := bufio.NewReader(file)
+				for {
+					line, err := rd.ReadString('\n')
+					if err == io.EOF {
+						if first {
+							output[0] = strings.TrimSuffix(line, "\n")
+						} else {
+							output = append(output, strings.TrimSuffix(line, "\n"))
+						}
+						break
+					}
+					if err != nil {
+						return err
+					}
+					if first {
+						output[0] = strings.TrimSuffix(line, "\n")
+						first = false
+					} else {
+						output = append(output, strings.TrimSuffix(line, "\n"))
+					}
+				}
+				err = handleOutput(output, 2, args)
+				if err != nil {
+					return err
+				}
+				return checkAnd(nil, 2, args)
+			}
+		}
 		for i := 1; i < len(args); i++ {
 			if args[i] == "|" {
 				break
@@ -271,13 +314,15 @@ func execInput(input string) error {
 			if args[i] == ">" {
 				break
 			}
+			if args[i] == "&&" {
+				break
+			}
 			file, err := os.Open(args[i])
 			if err != nil {
 				return err
 			}
 			defer file.Close()
 			rd := bufio.NewReader(file)
-			first := true
 			for {
 				line, err := rd.ReadString('\n')
 				if err == io.EOF {
@@ -315,7 +360,6 @@ func execInput(input string) error {
 		return checkAnd(nil, 0, args)
 	}
 
-	fmt.Println("hello")
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
@@ -429,4 +473,30 @@ func checkRedirection(args []string) (string, error) {
 		redirectOutput = args[redirectOutputSignIndex+1]
 	}
 	return redirectOutput, nil
+}
+
+func checkInputRedirection(args []string) (string, error) {
+	redirectInput := ""
+	redirectInputSignIndex := -1
+	redirectInputSeen := false
+
+	// check if there is more than one of the same redirection symbol
+	for i, e := range args {
+		if e == "<" {
+			if !redirectInputSeen {
+				redirectInputSeen = true
+				redirectInputSignIndex = i
+			} else {
+				return redirectInput, ErrMultipleRedirection
+			}
+		}
+	}
+
+	if redirectInputSeen {
+		if redirectInputSignIndex+1 >= len(args) || redirectInputSignIndex-1 < 0 {
+			return redirectInput, ErrInvalidCommand
+		}
+		redirectInput = args[redirectInputSignIndex+1]
+	}
+	return redirectInput, nil
 }
