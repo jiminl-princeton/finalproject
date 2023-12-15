@@ -324,6 +324,7 @@ func execInput(input string) error {
 					rememberI = i - 1
 					break
 				}
+				continue
 			}
 			if args[i] == ">" {
 				i += 2
@@ -331,6 +332,7 @@ func execInput(input string) error {
 					rememberI = i - 1
 					break
 				}
+				continue
 			}
 			if args[i] == "&&" {
 				break
