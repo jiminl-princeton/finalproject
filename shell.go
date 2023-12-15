@@ -325,6 +325,8 @@ func execInput(input string) error {
 
 	args = separateSpecialSigns(args)
 
+	output := make([]string, 0)
+
 	// Check for built-in commands.
 	switch args[0] {
 	case "cd":
@@ -339,7 +341,7 @@ func execInput(input string) error {
 	case "pwd":
 		// Get working directory and error
 		wd, err := os.Getwd()
-		fmt.Println(wd)
+		output[0] = wd
 		return checkAnd(err, 0, args)
 	case "mkdir":
 		if len(args) < 2 {
@@ -373,12 +375,13 @@ func execInput(input string) error {
 			return ErrNoPath
 		}
 		return checkAnd(os.Remove(args[1]), 1, args)
-	case "getpid":
+	case "getpid": // need alice
 		err := checkRedirection(args)
 		if err != nil {
 			return err
 		}
-		err = echoRedirectIO(fmt.Sprint(os.Getpid()))
+		output[0] = fmt.Sprint(os.Getpid())
+		err = echoRedirectIO(output[0])
 		if err != nil {
 			return err
 		}
@@ -399,6 +402,7 @@ func execInput(input string) error {
 			return ErrNoPath
 		}
 		value := os.Getenv(args[1])
+		output[0] = value
 		if value == "" {
 			return nil
 		}
@@ -426,7 +430,8 @@ func execInput(input string) error {
 			return err
 		}
 		split := strings.SplitN(input, "\"", 3)
-		err = echoRedirectIO(split[1])
+		output[0] = split[1]
+		err = echoRedirectIO(output[0])
 		if err != nil {
 			return err
 		}
@@ -441,11 +446,10 @@ func execInput(input string) error {
 		if err != nil {
 			return err
 		}
-		names := []string{}
 		for _, e := range entries {
-			names = append(names, e.Name())
+			output = append(output, e.Name())
 		}
-		err = lsRedirectIO(names)
+		err = lsRedirectIO(output)
 		if err != nil {
 			return err
 		}
