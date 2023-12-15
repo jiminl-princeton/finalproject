@@ -261,6 +261,12 @@ func execInput(input string) error {
 			if args[i] == "|" {
 				break
 			}
+			if args[i] == "<" {
+				break
+			}
+			if args[i] == ">" {
+				break
+			}
 			file, err := os.Open(args[i])
 			if err != nil {
 				return err
